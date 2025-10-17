@@ -72,7 +72,7 @@ public class ThermalPrinterCordovaPlugin extends CordovaPlugin {
                 } else if (action.equals("disconnectPrinter")) {
                     ThermalPrinterCordovaPlugin.this.disconnectPrinter(callbackContext, args.getJSONObject(0));
                 } else if (action.equals("requestPermissions")) {
-                    ThermalPrinterCordovaPlugin.this.requestUSBPermissions(callbackContext, args.getJSONObject(0));
+                    ThermalPrinterCordovaPlugin.this.checkAndRequestUSBPermissions(callbackContext, args.getJSONObject(0));
                 } else if (action.equals("bitmapToHexadecimalString")) {
                     ThermalPrinterCordovaPlugin.this.bitmapToHexadecimalString(callbackContext, args.getJSONObject(0));
                 }
@@ -177,18 +177,27 @@ public class ThermalPrinterCordovaPlugin extends CordovaPlugin {
         }
     }
 
-    private void requestUSBPermissions(CallbackContext callbackContext, JSONObject data) throws JSONException {
+private void requestUSBPermissions(CallbackContext callbackContext, JSONObject data) throws JSONException {
+    try {
         DeviceConnection connection = ThermalPrinterCordovaPlugin.this.getPrinterConnection(callbackContext, data);
-        if (connection != null) {
-            String intentName = "thermalPrinterUSBRequest" + ((UsbConnection) connection).getDevice().getDeviceId();
+        if (connection instanceof UsbConnection) {
+            UsbConnection usbConnection = (UsbConnection) connection;
+            UsbDevice usbDevice = usbConnection.getDevice();
+            
+            String intentName = "thermalPrinterUSBRequest" + usbDevice.getDeviceId();
+
+            // Usar FLAG_IMMUTABLE para Android 6.0+
+            int flags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? 
+                PendingIntent.FLAG_IMMUTABLE : PendingIntent.FLAG_UPDATE_CURRENT;
 
             PendingIntent permissionIntent = PendingIntent.getBroadcast(
                 cordova.getActivity().getBaseContext(),
                 0,
                 new Intent(intentName),
-                FLAG_MUTABLE
+                flags
             );
 
+            // Resto do código permanece o mesmo...
             ArrayList<BroadcastReceiver> broadcastReceiverArrayList = new ArrayList<>();
             BroadcastReceiver broadcastReceiver = new BroadcastReceiver() {
                 @Override
@@ -213,6 +222,7 @@ public class ThermalPrinterCordovaPlugin extends CordovaPlugin {
                             }
                             callbackContext.error(new JSONObject(new HashMap<String, Object>() {{
                                 put("granted", false);
+                                put("error", "USB permission denied");
                             }}));
                         }
                     }
@@ -225,10 +235,26 @@ public class ThermalPrinterCordovaPlugin extends CordovaPlugin {
 
             UsbManager usbManager = (UsbManager) this.cordova.getActivity().getSystemService(Context.USB_SERVICE);
             if (usbManager != null) {
-                usbManager.requestPermission(((UsbConnection) connection).getDevice(), permissionIntent);
+                usbManager.requestPermission(usbDevice, permissionIntent);
+            } else {
+                callbackContext.error(new JSONObject(new HashMap<String, Object>() {{
+                    put("granted", false);
+                    put("error", "USB service not available");
+                }}));
             }
+        } else {
+            callbackContext.error(new JSONObject(new HashMap<String, Object>() {{
+                put("granted", false);
+                put("error", "Not a USB connection");
+            }}));
         }
+    } catch (Exception e) {
+        callbackContext.error(new JSONObject(new HashMap<String, Object>() {{
+            put("granted", false);
+            put("error", e.getMessage());
+        }}));
     }
+}
 
     private void listPrinters(CallbackContext callbackContext, JSONObject data) throws JSONException {
         JSONArray printers = new JSONArray();
@@ -450,4 +476,23 @@ public class ThermalPrinterCordovaPlugin extends CordovaPlugin {
         }
         return true;
     }
+
+
+
+
+
+    private void checkAndRequestUSBPermissions(CallbackContext callbackContext, JSONObject data) throws JSONException {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        // Para Android 11+, precisamos verificar se temos permissão para acessar dispositivos USB
+        DeviceConnection connection = getPrinterConnection(callbackContext, data);
+        if (connection instanceof UsbConnection) {
+            UsbDevice usbDevice = ((UsbConnection) connection).getDevice();
+            requestUSBPermissions(callbackContext, data);
+        }
+    } else {
+        // Para versões anteriores, usar o método existente
+        requestUSBPermissions(callbackContext, data);
+    }
+}
+    
 }
