@@ -186,23 +186,22 @@ private void requestUSBPermissions(CallbackContext callbackContext, JSONObject d
             
             String intentName = "thermalPrinterUSBRequest" + usbDevice.getDeviceId();
 
-            // Usar FLAG_IMMUTABLE para Android 6.0+
-            int flags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? 
-                PendingIntent.FLAG_IMMUTABLE : PendingIntent.FLAG_UPDATE_CURRENT;
+            // CORREÇÃO: Apenas UMA declaração da variável flags
+            int flags;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                flags = PendingIntent.FLAG_MUTABLE | PendingIntent.FLAG_UPDATE_CURRENT;
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                flags = PendingIntent.FLAG_IMMUTABLE;
+            } else {
+                flags = PendingIntent.FLAG_UPDATE_CURRENT;
+            }
 
-int flags;
-if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-    flags = PendingIntent.FLAG_MUTABLE | PendingIntent.FLAG_UPDATE_CURRENT;
-} else {
-    flags = PendingIntent.FLAG_UPDATE_CURRENT;
-}
-
-PendingIntent permissionIntent = PendingIntent.getBroadcast(
-    cordova.getActivity().getBaseContext(),
-    0,
-    new Intent(intentName),
-    flags
-);
+            PendingIntent permissionIntent = PendingIntent.getBroadcast(
+                cordova.getActivity().getBaseContext(),
+                0,
+                new Intent(intentName),
+                flags
+            );
 
             // Resto do código permanece o mesmo...
             ArrayList<BroadcastReceiver> broadcastReceiverArrayList = new ArrayList<>();
