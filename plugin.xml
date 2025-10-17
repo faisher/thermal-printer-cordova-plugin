@@ -16,7 +16,15 @@
         </config-file>
 
         <config-file parent="/*" target="AndroidManifest.xml">
-            <uses-feature android:name="android.hardware.usb.host" />
+<uses-feature android:name="android.hardware.usb.host" android:required="true" />
+
+<!-- Adicione estas linhas para Android 11+ -->
+<uses-permission android:name="android.permission.USB_PERMISSION" />
+<queries>
+    <intent>
+        <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+    </intent>
+</queries>
             <uses-permission android:maxSdkVersion="30" android:name="android.permission.BLUETOOTH" />
             <uses-permission android:name="android.permission.INTERNET" />
             <uses-permission android:maxSdkVersion="30" android:name="android.permission.BLUETOOTH_ADMIN" />
