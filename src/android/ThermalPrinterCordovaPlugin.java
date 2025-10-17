@@ -177,6 +177,7 @@ public class ThermalPrinterCordovaPlugin extends CordovaPlugin {
         }
     }
 
+
 private void requestUSBPermissions(CallbackContext callbackContext, JSONObject data) throws JSONException {
     try {
         DeviceConnection connection = ThermalPrinterCordovaPlugin.this.getPrinterConnection(callbackContext, data);
@@ -186,20 +187,30 @@ private void requestUSBPermissions(CallbackContext callbackContext, JSONObject d
             
             String intentName = "thermalPrinterUSBRequest" + usbDevice.getDeviceId();
 
-            // CORREÇÃO: Apenas UMA declaração da variável flags
+            // CORREÇÃO PARA ANDROID 14+ (API 34/U+)
             int flags;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                // Android 14+ requer FLAG_IMMUTABLE
+                flags = PendingIntent.FLAG_IMMUTABLE;
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                // Android 12-13 pode usar FLAG_MUTABLE
                 flags = PendingIntent.FLAG_MUTABLE | PendingIntent.FLAG_UPDATE_CURRENT;
             } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                // Android 6.0+ pode usar FLAG_IMMUTABLE
                 flags = PendingIntent.FLAG_IMMUTABLE;
             } else {
+                // Versões anteriores
                 flags = PendingIntent.FLAG_UPDATE_CURRENT;
             }
+
+            // Criar Intent explícito para evitar problemas de segurança
+            Intent intent = new Intent(intentName);
+            intent.setPackage(cordova.getActivity().getPackageName());
 
             PendingIntent permissionIntent = PendingIntent.getBroadcast(
                 cordova.getActivity().getBaseContext(),
                 0,
-                new Intent(intentName),
+                intent,
                 flags
             );
 
@@ -261,6 +272,8 @@ private void requestUSBPermissions(CallbackContext callbackContext, JSONObject d
         }}));
     }
 }
+
+
 
     private void listPrinters(CallbackContext callbackContext, JSONObject data) throws JSONException {
         JSONArray printers = new JSONArray();
