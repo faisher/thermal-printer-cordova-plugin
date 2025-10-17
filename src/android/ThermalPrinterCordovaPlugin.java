@@ -190,12 +190,19 @@ private void requestUSBPermissions(CallbackContext callbackContext, JSONObject d
             int flags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? 
                 PendingIntent.FLAG_IMMUTABLE : PendingIntent.FLAG_UPDATE_CURRENT;
 
-            PendingIntent permissionIntent = PendingIntent.getBroadcast(
-                cordova.getActivity().getBaseContext(),
-                0,
-                new Intent(intentName),
-                flags
-            );
+int flags;
+if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+    flags = PendingIntent.FLAG_MUTABLE | PendingIntent.FLAG_UPDATE_CURRENT;
+} else {
+    flags = PendingIntent.FLAG_UPDATE_CURRENT;
+}
+
+PendingIntent permissionIntent = PendingIntent.getBroadcast(
+    cordova.getActivity().getBaseContext(),
+    0,
+    new Intent(intentName),
+    flags
+);
 
             // Resto do código permanece o mesmo...
             ArrayList<BroadcastReceiver> broadcastReceiverArrayList = new ArrayList<>();
