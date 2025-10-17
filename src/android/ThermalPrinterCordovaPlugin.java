@@ -183,16 +183,87 @@ private void requestUSBPermissions(CallbackContext callbackContext, JSONObject d
         DeviceConnection connection = ThermalPrinterCordovaPlugin.this.getPrinterConnection(callbackContext, data);
         if (connection instanceof UsbConnection) {
             UsbConnection usbConnection = (UsbConnection) connection;
+            UsbDevice usbDevice = usbConnection.getDevice();
             
-            // Tentar conectar diretamente - muitas impressoras USB não exigem permissão explícita
-            if (usbConnection.connect()) {
-                callbackContext.success(new JSONObject(new HashMap<String, Object>() {{
-                    put("granted", true);
-                }}));
+            String intentName = "thermalPrinterUSBRequest" + usbDevice.getDeviceId();
+
+            // CORREÇÃO PARA ANDROID 14+ (API 34/U+)
+            int flags;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                // Android 14+ requer FLAG_IMMUTABLE
+                flags = PendingIntent.FLAG_IMMUTABLE;
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                // Android 12-13 pode usar FLAG_MUTABLE
+                flags = PendingIntent.FLAG_MUTABLE | PendingIntent.FLAG_UPDATE_CURRENT;
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                // Android 6.0+ pode usar FLAG_IMMUTABLE
+                flags = PendingIntent.FLAG_IMMUTABLE;
+            } else {
+                // Versões anteriores
+                flags = PendingIntent.FLAG_UPDATE_CURRENT;
+            }
+
+            // Criar Intent explícito para evitar problemas de segurança
+            Intent intent = new Intent(intentName);
+            intent.setPackage(cordova.getActivity().getPackageName());
+
+            PendingIntent permissionIntent = PendingIntent.getBroadcast(
+                cordova.getActivity().getBaseContext(),
+                0,
+                intent,
+                flags
+            );
+
+            // CORREÇÃO: Registrar o receiver com flags para Android 12+
+            ArrayList<BroadcastReceiver> broadcastReceiverArrayList = new ArrayList<>();
+            BroadcastReceiver broadcastReceiver = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    String action = intent.getAction();
+                    if (action != null && action.equals(intentName)) {
+                        for (BroadcastReceiver br : broadcastReceiverArrayList) {
+                            if (br != null) {
+                                cordova.getActivity().unregisterReceiver(br);
+                            }
+                        }
+                        synchronized (this) {
+                            UsbManager usbManager = (UsbManager) ThermalPrinterCordovaPlugin.this.cordova.getActivity().getSystemService(Context.USB_SERVICE);
+                            UsbDevice usbDevice = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+                            if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
+                                if (usbManager != null && usbDevice != null) {
+                                    callbackContext.success(new JSONObject(new HashMap<String, Object>() {{
+                                        put("granted", true);
+                                    }}));
+                                    return;
+                                }
+                            }
+                            callbackContext.error(new JSONObject(new HashMap<String, Object>() {{
+                                put("granted", false);
+                                put("error", "USB permission denied");
+                            }}));
+                        }
+                    }
+                }
+            };
+
+            IntentFilter filter = new IntentFilter(intentName);
+            
+            // CORREÇÃO: Registrar receiver com flags apropriadas para Android 12+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                cordova.getActivity().registerReceiver(broadcastReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+            } else {
+                cordova.getActivity().registerReceiver(broadcastReceiver, filter);
+            }
+            
+            broadcastReceiverArrayList.add(broadcastReceiver);
+
+            UsbManager usbManager = (UsbManager) this.cordova.getActivity().getSystemService(Context.USB_SERVICE);
+            if (usbManager != null) {
+                usbManager.requestPermission(usbDevice, permissionIntent);
             } else {
                 callbackContext.error(new JSONObject(new HashMap<String, Object>() {{
                     put("granted", false);
-                    put("error", "Failed to connect to USB device");
+                    put("error", "USB service not available");
                 }}));
             }
         } else {
